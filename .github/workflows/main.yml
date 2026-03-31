@@ -1,0 +1,30 @@
+name: Gerar APK Rodrigues
+on:
+  push:
+    branches: [ main ]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run build
+      - run: npx cap sync android
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+      - name: Compilar APK
+        run: |
+          npx cap add android
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+      - name: Download do APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-entregador-rodrigues
+          path: android/app/build/outputs/apk/debug/app-debug.apk
