@@ -12,8 +12,11 @@ jobs:
         with:
           node-version: 20
           
-      - name: Instalar Dependencias
-        run: npm install
+      - name: Instalar Ferramentas e Dependencias
+        run: |
+          npm install
+          # Instalando o motor do Capacitor explicitamente
+          npm install @capacitor/cli @capacitor/core @capacitor/android
 
       - name: Gerar Pasta Dist (Build React)
         run: npm run build
@@ -24,11 +27,14 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Inicializar e Compilar Android
+      - name: Criar Projeto Android e Sincronizar
         run: |
-          # Se a pasta android não existir, ele cria agora
+          # Comando para criar a pasta android se ela não existir
           npx cap add android || true
           npx cap sync android
+
+      - name: Compilar APK Final
+        run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
