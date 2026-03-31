@@ -1,0 +1,8 @@
+{
+	"appId": "com.rodrigues.pilotos",
+	"appName": "Rodrigues Pilotos",
+	"webDir": "dist",
+	"server": {
+		"androidScheme": "https"
+	}
+}
