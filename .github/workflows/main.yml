@@ -7,23 +7,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install
-      - run: npm run build
-      - run: npx cap sync android
-      - uses: actions/setup-java@v4
+          
+      - name: Instalar Dependencias
+        run: npm install
+
+      - name: Gerar Pasta Dist (Build React)
+        run: npm run build
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
-      - name: Compilar APK
+
+      - name: Inicializar e Compilar Android
         run: |
-          npx cap add android
+          # Se a pasta android não existir, ele cria agora
+          npx cap add android || true
+          npx cap sync android
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
-      - name: Download do APK
+
+      - name: Baixar o APK Pronto
         uses: actions/upload-artifact@v4
         with:
           name: app-entregador-rodrigues
