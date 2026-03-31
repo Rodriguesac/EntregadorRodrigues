@@ -1,22 +1,26 @@
 name: Gerar APK Rodrigues
+
 on:
   push:
     branches: [ main ]
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout do Codigo
+        uses: actions/checkout@v4
       
-      - uses: actions/setup-node@v4
+      - name: Configurar Node.js (Versao Requerida pelo Capacitor)
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22  # Atualizado para v22 para evitar o erro de compatibilidade do Capacitor CLI
           
       - name: Instalar Ferramentas e Dependencias
         run: |
           npm install
-          # Instalando o motor do Capacitor explicitamente
-          npm install @capacitor/cli @capacitor/core @capacitor/android
+          # Instalando o motor do Capacitor e plugins nativos explicitamente
+          npm install @capacitor/cli @capacitor/core @capacitor/android @capacitor/geolocation @capacitor/camera @capacitor/haptics @capacitor/network @capacitor/device
 
       - name: Gerar Pasta Dist (Build React)
         run: npm run build
@@ -25,21 +29,22 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '21'
+          java-version: '17' # Java 17 e o mais estável para builds de Android com Gradle atual
 
-      - name: Criar Projeto Android e Sincronizar
+      - name: Sincronizar Projeto Android NATIVO
         run: |
-          # Comando para criar a pasta android se ela não existir
+          # Garante que a pasta android existe e injeta o codigo do site dentro dela
           npx cap add android || true
           npx cap sync android
 
-      - name: Compilar APK Final
+      - name: Compilar APK Final (Gradle)
         run: |
           cd android
+          # Dá permissão de execução ao motor de build do Android
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Baixar o APK Pronto
+      - name: Disponibilizar APK para Download
         uses: actions/upload-artifact@v4
         with:
           name: app-entregador-rodrigues
