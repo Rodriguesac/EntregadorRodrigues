@@ -1,51 +1,52 @@
-name: Gerar APK Rodrigues
+name: Gerar APK UP Entregas
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ] # Dispara o build toda vez que você der push na main
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout do Codigo
+      - name: Checkout do Código
         uses: actions/checkout@v4
-      
-      - name: Configurar Node.js (Versao Requerida pelo Capacitor)
+
+      - name: Configurar Node.js (v22)
         uses: actions/setup-node@v4
         with:
-          node-version: 22  # Atualizado para v22 para evitar o erro de compatibilidade do Capacitor CLI
-          
-      - name: Instalar Ferramentas e Dependencias
+          node-version: 22
+          cache: 'npm'
+
+      - name: Instalar Dependências e Plugins
         run: |
           npm install
-          # Instalando o motor do Capacitor e plugins nativos explicitamente
+          # Garante que todos os plugins de hardware (GPS, Camera, etc) estejam instalados
           npm install @capacitor/cli @capacitor/core @capacitor/android @capacitor/geolocation @capacitor/camera @capacitor/haptics @capacitor/network @capacitor/device
 
-      - name: Gerar Pasta Dist (Build React)
+      - name: Build do Projeto Web (Vite)
         run: npm run build
 
-      - name: Configurar Java
+      - name: Configurar Java (JDK 21)
         uses: actions/setup-java@v4
         with:
+          java-version: '21'
           distribution: 'zulu'
-          java-version: '21' # 
 
-      - name: Sincronizar Projeto Android NATIVO
+      - name: Sincronizar Capacitor Android
         run: |
-          # Garante que a pasta android existe e injeta o codigo do site dentro dela
+          # Se a pasta android não existir no Git, ele cria agora
           npx cap add android || true
           npx cap sync android
 
-      - name: Compilar APK Final (Gradle)
+      - name: Compilar APK via Gradle
         run: |
           cd android
-          # Dá permissão de execução ao motor de build do Android
           chmod +x gradlew
           ./gradlew assembleDebug
 
       - name: Disponibilizar APK para Download
         uses: actions/upload-artifact@v4
         with:
-          name: app-entregador-rodrigues
+          name: UP-Entregas-Piloto-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
