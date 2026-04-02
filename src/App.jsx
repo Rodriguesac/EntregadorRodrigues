@@ -1,13 +1,10 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React from 'react';
 import EntregadorMobile from './pages/EntregadorMobile';
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<EntregadorMobile />} />
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
-    </BrowserRouter>
+    // O App simplesmente carrega o Motor do Entregador.
+    // Toda a navegação (Radar, Histórico, Mais) agora é feita lá dentro!
+    <EntregadorMobile />
   );
 }

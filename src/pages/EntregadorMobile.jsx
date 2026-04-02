@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * UP! ENTREGAS - MOBILE V2.1 (ULTIMATE PRO + GPS FIX)
+ * UP! ENTREGAS - MOBILE V2.1 (ULTIMATE PRO + GPS FIX + STATUS ENTREGA)
  * ============================================================================
  */
 
@@ -19,7 +19,9 @@ import { Network } from '@capacitor/network';
 // 1. CONSTANTES E UTILITÁRIOS GERAIS
 // ============================================================================
 const LOGO_UP = "https://res.cloudinary.com/dbd9x1o02/image/upload/v1775028310/rodrigues_geral/cffexfjiihcqhpoxanyo.png";
-const CLOUDINARY_CLOUD_NAME = 'dbd9x1o02'; const CLOUDINARY_UPLOAD_PRESET = 'fc3i8urq'; const WHATSAPP_BASE = '5567999999999';
+const CLOUDINARY_CLOUD_NAME = 'dbd9x1o02'; 
+const CLOUDINARY_UPLOAD_PRESET = 'fc3i8urq'; 
+const WHATSAPP_BASE = '5567999999999';
 
 const formatarMoeda = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 const apenasNumeros = (str) => str.replace(/\D/g, '');
@@ -202,7 +204,7 @@ export default function EntregadorMobileV21() {
         const uOf = onSnapshot(query(collection(db, "pedidos"), where("statusDespacho", "==", "OFERTA_INDIVIDUAL"), where("entregadorAtualOferta", "==", entregador.id)), (s) => { 
             if(!s.empty){ setOferta({id: s.docs[0].id, ...s.docs[0].data()}); audio.current.play().catch(()=>{}); Haptics.vibrate(); } else { setOferta(null); audio.current.pause(); audio.current.currentTime=0; } 
         });
-        const uMoc = onSnapshot(query(collection(db, "pedidos"), where("entregadorId", "==", entregador.id), where("status", "in", ["A_CAMINHO_LOJA", "SAIU_ENTREGA"])), s => setMochila(s.docs.map(d => ({id: d.id, ...d.data()}))));
+        const uMoc = onSnapshot(query(collection(db, "pedidos"), where("entregadorId", "==", entregador.id), where("status", "in", ["A_CAMINHO_LOJA", "NA_LOJA", "SAIU_ENTREGA"])), s => setMochila(s.docs.map(d => ({id: d.id, ...d.data()}))));
         return () => { uOf(); uMoc(); };
     }, [isOnline, entregador]);
 
@@ -226,8 +228,58 @@ export default function EntregadorMobileV21() {
     };
     
     const sair = () => { localStorage.removeItem('@UP:cpf'); setEntregador(null); setIsOnline(false); setSubTela(null); setAba('RADAR'); };
+    
     const aceitar = async () => { if(!oferta) return; Haptics.impact({style: ImpactStyle.Heavy}); await updateDoc(doc(db, "pedidos", oferta.id), {status: 'A_CAMINHO_LOJA', statusDespacho: 'Atribuído', entregadorId: entregador.id, horarioAceitePiloto: serverTimestamp()}); setOferta(null); };
+    
     const rejeitar = async () => { if(!oferta) return; Haptics.impact({style: ImpactStyle.Light}); await updateDoc(doc(db, "pedidos", oferta.id), {entregadorAtualOferta: "PROXIMO_FILA", tentativas: increment(1)}); setOferta(null); };
+
+    // --- NOVAS FUNÇÕES DE FLUXO DE ENTREGA ---
+    const confirmarChegadaLoja = async (pedidoId) => {
+        Haptics.impact({ style: ImpactStyle.Medium });
+        await updateDoc(doc(db, "pedidos", pedidoId), { 
+            status: 'NA_LOJA', 
+            horarioChegadaLoja: serverTimestamp() 
+        });
+    };
+
+    const confirmarColeta = async (pedidoId) => {
+        Haptics.notification({ style: ImpactStyle.Success });
+        await updateDoc(doc(db, "pedidos", pedidoId), { 
+            status: 'SAIU_ENTREGA', 
+            horarioColeta: serverTimestamp() 
+        });
+    };
+
+    const finalizarEntrega = async (p) => {
+        setProcessando(true);
+        try {
+            const image = await Camera.getPhoto({
+                quality: 60,
+                allowEditing: false,
+                resultType: CameraResultType.Uri,
+                source: CameraSource.Camera
+            });
+
+            const urlFoto = await uploadToCloudinary(image.webPath);
+
+            await updateDoc(doc(db, "pedidos", p.id), {
+                status: 'CONCLUIDO',
+                horarioConcluido: serverTimestamp(),
+                comprovanteEntrega: urlFoto
+            });
+
+            await updateDoc(doc(db, "entregadores", entregador.id), {
+                ganhosTaxas: increment(p.valores?.taxaEntrega || 0)
+            });
+
+            Haptics.notification({ style: ImpactStyle.Success });
+            alert("Entrega concluída com sucesso! 💸");
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setProcessando(false);
+        }
+    };
 
     // FUNÇÕES DE PERMISSÕES E NAVEGAÇÃO CORRIGIDAS
     const solicitarLocalizacao = async () => {
@@ -246,7 +298,6 @@ export default function EntregadorMobileV21() {
     };
 
     const abrirNavegacaoGPS = (endereco) => {
-        // CORREÇÃO: Força a abertura do Google Maps via URL Universal com a rota cravada
         const destino = encodeURIComponent(`${endereco.rua}, ${endereco.numero}, ${endereco.bairro}, Campo Grande, MS`);
         const urlMaps = `https://www.google.com/maps/dir/?api=1&destination=${destino}&travelmode=driving`;
         window.open(urlMaps, '_system');
@@ -388,11 +439,26 @@ export default function EntregadorMobileV21() {
                                         
                                         <div className="bg-slate-50 dark:bg-zinc-950 p-4 rounded-3xl mb-6 flex justify-between items-center border border-slate-100 dark:border-zinc-800">
                                             <div className="flex gap-4 items-center"><div className="w-12 h-12 rounded-full bg-red-50 dark:bg-red-900/20 flex justify-center items-center shrink-0"><Lucide.MapPin size={20} className="text-[#EA1D2C]" /></div><div><p className="text-sm font-[1000] text-slate-800 dark:text-white truncate max-w-[150px] uppercase">{p.endereco?.rua}, {p.endereco?.numero}</p><p className="text-[10px] font-bold text-slate-500 dark:text-zinc-400 mt-0.5 uppercase">{p.cliente?.nome} • {p.endereco?.bairro}</p></div></div>
-                                            {/* CORREÇÃO DO GPS: Abre o Google Maps ou Waze diretamente cravando a rota */}
                                             <button onClick={() => abrirNavegacaoGPS(p.endereco)} className="w-14 h-14 bg-slate-200 dark:bg-zinc-800 text-slate-700 dark:text-white rounded-full flex items-center justify-center active:scale-95 transition-transform"><Lucide.Navigation size={24}/></button>
                                         </div>
                                         
-                                        <button className="w-full py-5 bg-[#EA1D2C] text-white rounded-[2rem] font-[1000] uppercase text-sm shadow-xl shadow-red-500/20 active:scale-95 transition-transform">Cheguei no local</button>
+                                        <button 
+                                            disabled={processando}
+                                            onClick={() => {
+                                                if(p.status === 'A_CAMINHO_LOJA' || !p.status) confirmarChegadaLoja(p.id);
+                                                else if(p.status === 'NA_LOJA') confirmarColeta(p.id);
+                                                else if(p.status === 'SAIU_ENTREGA') finalizarEntrega(p);
+                                            }}
+                                            className="w-full py-5 bg-[#EA1D2C] text-white rounded-[2rem] font-[1000] uppercase text-sm shadow-xl flex justify-center items-center gap-2 mt-2 transition-all active:scale-95"
+                                        >
+                                            {processando ? <Lucide.Loader2 className="animate-spin"/> : (
+                                                <>
+                                                    {(p.status === 'A_CAMINHO_LOJA' || !p.status) && 'Cheguei na Loja'}
+                                                    {p.status === 'NA_LOJA' && 'Coletar Pedido'}
+                                                    {p.status === 'SAIU_ENTREGA' && 'Finalizar Entrega (Foto)'}
+                                                </>
+                                            )}
+                                        </button>
                                     </div>
                                 ))}
                             </div>
